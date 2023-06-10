@@ -15,6 +15,7 @@ void clearTable (uint64_t numTable)
     {
       // writing 0, for initializing the addresses in the table
       PMwrite (numTable * PAGE_SIZE + row, 0);
+
     }
 }
 
@@ -33,9 +34,19 @@ uint64_t getOffSet (uint64_t virtualAddress)
   return virtualAddress & t;
 }
 
-void checkFrameEmpty (uint64_t baseAddress)
+bool isFrameEmpty (uint64_t baseIndex)
 {
-
+  uint64_t address = baseIndex * PAGE_SIZE;
+  word_t val = 0;
+  for (int row = 0; row < PAGE_SIZE; ++row)
+    {
+      PMread (address + row, &val);
+      if (val != 0)
+        {
+          return false;
+        }
+    }
+    return true;
 }
 
 /**
@@ -43,11 +54,15 @@ void checkFrameEmpty (uint64_t baseAddress)
  */
 uint64_t
 traverseTree (int currentDepth, uint64_t currentFrame, uint64_t maxFrameIndex,
-              uint64_t currentVRAddress)
+              uint64_t currentVRAddress, uint64_t prevTable)
 {
   if (currentFrame > maxFrameIndex)
     {
       maxFrameIndex = currentFrame;
+    }
+  if (isFrameEmpty(currentFrame))
+    {
+      return 0;//TODO: return the relevant address
     }
   if (currentDepth == TABLES_DEPTH)
     {
@@ -60,7 +75,8 @@ traverseTree (int currentDepth, uint64_t currentFrame, uint64_t maxFrameIndex,
       PMread (PAGE_SIZE * currentFrame + row, &nextFrame);
       auto rev_val = traverseTree (currentDepth + 1,
                                    nextFrame,
-                                   maxFrameIndex, currentVRAddress);
+                                   maxFrameIndex, currentVRAddress,
+                                   PAGE_SIZE * currentFrame + row);
     }
 }
 
