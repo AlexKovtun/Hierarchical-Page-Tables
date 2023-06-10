@@ -30,7 +30,45 @@ void VMinitialize ()
 uint64_t getOffSet (uint64_t virtualAddress)
 {
   uint64_t t = PAGE_SIZE - 1;
-  uint64_t offSet = virtualAddress & t;
+  return virtualAddress & t;
+}
+
+void checkFrameEmpty (uint64_t baseAddress)
+{
+
+}
+
+/**
+ * recursive DFS search
+ */
+uint64_t
+traverseTree (int currentDepth, uint64_t currentFrame, uint64_t maxFrameIndex,
+              uint64_t currentVRAddress)
+{
+  if (currentFrame > maxFrameIndex)
+    {
+      maxFrameIndex = currentFrame;
+    }
+  if (currentDepth == TABLES_DEPTH)
+    {
+      return currentFrame;
+    }
+
+  for (int row = 0; row < PAGE_SIZE; ++row)
+    {
+      word_t nextFrame = 0;
+      PMread (PAGE_SIZE * currentFrame + row, &nextFrame);
+      auto rev_val = traverseTree (currentDepth + 1,
+                                   nextFrame,
+                                   maxFrameIndex, currentVRAddress);
+    }
+}
+
+word_t findFreeFrame ()
+{
+  //TODO: not to evict the previous frame? or should i not evict even further?
+  //TODO: traverse through the whole tree
+  return 0;
 }
 
 uint64_t getAddress (uint64_t virtualAddress)
@@ -49,11 +87,14 @@ uint64_t getAddress (uint64_t virtualAddress)
                                                 - 1))
                       & (PAGE_SIZE - 1);
       PMread (PAGE_SIZE * nextToRead + currentOffSet, &nextToRead);
-
+      if (!nextToRead)
+        { // we enter here iff we can't find empty frame
+          nextToRead = findFreeFrame ();
+        }
     }
   //TODO: handle when missing page
   //TODO: implement the algorithm they describe via zeroing and so on
-  return //TODO: full address
+  return nextToRead * PAGE_SIZE + offSet;
 }
 
 /* Reads a word from the given virtual address
@@ -65,8 +106,9 @@ uint64_t getAddress (uint64_t virtualAddress)
  */
 int VMread (uint64_t virtualAddress, word_t *value)
 {
-  getAddress (virtualAddress);
-  return 0;
+  auto readAdd = getAddress (virtualAddress);
+  PMread (readAdd, value);
+  return 1;
 }
 
 /* Writes a word to the given virtual address.
@@ -77,6 +119,8 @@ int VMread (uint64_t virtualAddress, word_t *value)
  */
 int VMwrite (uint64_t virtualAddress, word_t value)
 {
-  return 0;
+  auto readAdd = getAddress (virtualAddress);
+  PMwrite (readAdd, value);
+  return 1;
 }
 
