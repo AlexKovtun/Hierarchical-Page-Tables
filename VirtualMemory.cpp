@@ -5,6 +5,9 @@
 #include "VirtualMemory.h"
 #include "PhysicalMemory.h"
 #include <cmath>
+
+uint64_t translateAddress (uint64_t virtualAddress, uint64_t *prevFrame);
+
 /*
  * According to this design, VMInitialize() only has to clear frame 0.
  */
@@ -64,8 +67,8 @@ bool isFrameEmpty (uint64_t baseIndex)
  * recursive DFS search
  */
 uint64_t
-traverseTree (int currentDepth, uint64_t currentFrame,uint64_t lastFrame, uint64_t *nextAvailableFrame,
-              uint64_t prevAddress, uint64_t *maxDistance, uint64_t *maxPage, uint64_t *maxParent,
+traverseTree (int currentDepth, uint64_t currentFrame, uint64_t lastFrame, uint64_t *nextAvailableFrame,
+              uint64_t prevAddress, uint64_t *maxDistance, uint64_t *to_evict, uint64_t *maxParent,
               uint64_t virtualAddress)
 {
   if (currentFrame > *nextAvailableFrame)
@@ -73,11 +76,11 @@ traverseTree (int currentDepth, uint64_t currentFrame,uint64_t lastFrame, uint64
 
   if (currentDepth == TABLES_DEPTH)
     {
-      uint64_t tmp = cyclicDistance (currentFrame, virtualAddress);
-      if (*maxDistance < tmp)
+      uint64_t cyclic_distance = cyclicDistance (currentFrame, virtualAddress);
+      if (*maxDistance < cyclic_distance)
         {
-          *maxDistance = tmp;
-          *maxPage = currentFrame;
+          *maxDistance = cyclic_distance;
+          *to_evict = currentFrame;
           *maxParent = prevAddress;
         }
       return -1;
@@ -93,11 +96,11 @@ traverseTree (int currentDepth, uint64_t currentFrame,uint64_t lastFrame, uint64
         {
           isEmptyFrame = false;
           auto ret_val = traverseTree (currentDepth + 1,
-                                       nextFrame,currentFrame,
+                                       nextFrame, lastFrame,
                                        nextAvailableFrame,
                                        PAGE_SIZE * currentFrame
                                        + row, maxDistance,
-                                       maxPage,
+                                       to_evict,
                                        maxParent,
                                        virtualAddress);
           if (ret_val != -1)
@@ -105,20 +108,21 @@ traverseTree (int currentDepth, uint64_t currentFrame,uint64_t lastFrame, uint64
         }
     }
 
-    if(isEmptyFrame && currentFrame != lastFrame){
-        PMwrite (prevAddress, 0);
-        return currentFrame;
+  if (isEmptyFrame && currentFrame != lastFrame)
+    {
+      PMwrite (prevAddress, 0);
+      return currentFrame;
     }
   return -1;
 }
 
-uint64_t findFreeFrame (uint64_t virtualAddress)
+uint64_t findFreeFrame (uint64_t virtualAddress, uint64_t lastFrame)
 {
-  uint64_t nextAvailableFrame = 0, maxDistance = 0, maxPage = 0, maxParent = 0;
-  uint64_t address = traverseTree (0, 0,0,
+  uint64_t nextAvailableFrame = 0, maxDistance = 0, to_evict = 0, maxParent = 0;
+  uint64_t address = traverseTree (0, 0, lastFrame,
                                    &nextAvailableFrame,
                                    0,
-                                   &maxDistance, &maxPage, &maxParent,
+                                   &maxDistance, &to_evict, &maxParent,
                                    virtualAddress);
   if (address != -1)
     {
@@ -130,18 +134,20 @@ uint64_t findFreeFrame (uint64_t virtualAddress)
       clearTable (nextAvailableFrame + 1);
       return nextAvailableFrame + 1;
     }
-//TODO: not to evict the previous frame? or should i not evict even further?
-  PMevict (virtualAddress, maxPage);
-  PMwrite (maxParent, 0);
 
-  return 0;
+  uint64_t prevFrame = 0;
+  uint64_t tmp = translateAddress (to_evict, &prevFrame);
+  PMevict (tmp, to_evict);
+  clearTable (tmp);
+  PMwrite (maxParent, 0);
+  return tmp;
 }
 
-uint64_t translateAddress (uint64_t virtualAddress)
+uint64_t translateAddress (uint64_t virtualAddress, uint64_t *prevFrame)
 {
   uint64_t offSet = getOffSet (virtualAddress);
   virtualAddress = virtualAddress >> OFFSET_WIDTH; // TODO: is needed?
-  uint64_t currentOffSet = 0;
+  uint64_t currentOffSet = 0, lastFrame = 0;//last frame needed not to corrupt the last father table
   word_t nextToRead = 0;
   bool needToBeRestored = false;
 
@@ -153,13 +159,15 @@ uint64_t translateAddress (uint64_t virtualAddress)
                                              * (TABLES_DEPTH - currentDepth
                                                 - 1))
                       & (PAGE_SIZE - 1);
-      PMread (PAGE_SIZE * nextToRead + currentOffSet, &nextToRead);
+      *prevFrame = PAGE_SIZE * nextToRead + currentOffSet;
+      PMread (*prevFrame, &nextToRead);
 
       if (!nextToRead)
         { // we enter here iff we can't find empty frame
-          uint64_t oldPage = nextToRead;
-          nextToRead = (word_t) findFreeFrame (virtualAddress);
-          PMwrite (oldPage * PAGE_SIZE + currentOffSet, nextToRead);
+          //uint64_t oldPage = nextToRead;
+          nextToRead = (word_t) findFreeFrame (virtualAddress, lastFrame);
+          PMwrite (*prevFrame, nextToRead);
+          lastFrame = nextToRead;
           needToBeRestored = true;
         }
 
@@ -178,7 +186,8 @@ uint64_t translateAddress (uint64_t virtualAddress)
  */
 int VMread (uint64_t virtualAddress, word_t *value)
 {
-  auto readAdd = translateAddress (virtualAddress);
+  uint64_t prevFrame = 0;
+  auto readAdd = translateAddress (virtualAddress, &prevFrame);
   PMread (readAdd, value);
   return 1;
 }
@@ -191,7 +200,8 @@ int VMread (uint64_t virtualAddress, word_t *value)
  */
 int VMwrite (uint64_t virtualAddress, word_t value)
 {
-  auto readAdd = translateAddress (virtualAddress);
+  uint64_t prevFrame = 0;
+  auto readAdd = translateAddress (virtualAddress, &prevFrame);
   PMwrite (readAdd, value);
   return 1;
 }

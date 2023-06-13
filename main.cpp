@@ -6,7 +6,17 @@
 int main (int argc, char **argv)
 {
   VMinitialize ();
+  int value = 0;
   VMwrite (13, 3);
+  VMread (13,&value);
+  printf("%d\n", value);
+
+  VMwrite (6, 10);
+  VMread (6,&value);
+  printf("%d\n", value);
+
+
+
 
 //  for (uint64_t i = 0; i < (2 * NUM_FRAMES); ++i)
 //    {
