@@ -4,18 +4,29 @@
 
 #include "VirtualMemory.h"
 #include "PhysicalMemory.h"
-
+#include <cmath>
 /*
  * According to this design, VMInitialize() only has to clear frame 0.
  */
 
-void clearTable (uint64_t numTable)
+/**
+ *
+ * @param p
+ * @param wantToInsert page_swapped_in
+ * @return
+ */
+uint64_t cyclicDistance (uint64_t p, uint64_t wantToInsert)
+{
+  int64_t absDistance = std::abs ((int64_t) (wantToInsert - p));
+  return (uint64_t) std::fmin (NUM_PAGES - absDistance, absDistance);
+}
+
+void clearTable (uint64_t numFrame)
 {
   for (int row = 0; row < PAGE_SIZE; ++row)
     {
       // writing 0, for initializing the addresses in the table
-      PMwrite (numTable * PAGE_SIZE + row, 0);
-
+      PMwrite (numFrame * PAGE_SIZE + row, 0);
     }
 }
 
@@ -46,53 +57,93 @@ bool isFrameEmpty (uint64_t baseIndex)
           return false;
         }
     }
-    return true;
+  return true;
 }
 
 /**
  * recursive DFS search
  */
 uint64_t
-traverseTree (int currentDepth, uint64_t currentFrame, uint64_t maxFrameIndex,
-              uint64_t currentVRAddress, uint64_t prevTable)
+traverseTree (int currentDepth, uint64_t currentFrame,uint64_t lastFrame, uint64_t *nextAvailableFrame,
+              uint64_t prevAddress, uint64_t *maxDistance, uint64_t *maxPage, uint64_t *maxParent,
+              uint64_t virtualAddress)
 {
-  if (currentFrame > maxFrameIndex)
-    {
-      maxFrameIndex = currentFrame;
-    }
-  if (isFrameEmpty(currentFrame))
-    {
-      return 0;//TODO: return the relevant address
-    }
+  if (currentFrame > *nextAvailableFrame)
+    *nextAvailableFrame = currentFrame;
+
   if (currentDepth == TABLES_DEPTH)
     {
-      return currentFrame;
+      uint64_t tmp = cyclicDistance (currentFrame, virtualAddress);
+      if (*maxDistance < tmp)
+        {
+          *maxDistance = tmp;
+          *maxPage = currentFrame;
+          *maxParent = prevAddress;
+        }
+      return -1;
     }
 
+  bool isEmptyFrame = true;
   for (int row = 0; row < PAGE_SIZE; ++row)
     {
       word_t nextFrame = 0;
       PMread (PAGE_SIZE * currentFrame + row, &nextFrame);
-      auto rev_val = traverseTree (currentDepth + 1,
-                                   nextFrame,
-                                   maxFrameIndex, currentVRAddress,
-                                   PAGE_SIZE * currentFrame + row);
+
+      if (nextFrame)
+        {
+          isEmptyFrame = false;
+          auto ret_val = traverseTree (currentDepth + 1,
+                                       nextFrame,currentFrame,
+                                       nextAvailableFrame,
+                                       PAGE_SIZE * currentFrame
+                                       + row, maxDistance,
+                                       maxPage,
+                                       maxParent,
+                                       virtualAddress);
+          if (ret_val != -1)
+            return ret_val;
+        }
     }
+
+    if(isEmptyFrame && currentFrame != lastFrame){
+        PMwrite (prevAddress, 0);
+        return currentFrame;
+    }
+  return -1;
 }
 
-word_t findFreeFrame ()
+uint64_t findFreeFrame (uint64_t virtualAddress)
 {
-  //TODO: not to evict the previous frame? or should i not evict even further?
-  //TODO: traverse through the whole tree
+  uint64_t nextAvailableFrame = 0, maxDistance = 0, maxPage = 0, maxParent = 0;
+  uint64_t address = traverseTree (0, 0,0,
+                                   &nextAvailableFrame,
+                                   0,
+                                   &maxDistance, &maxPage, &maxParent,
+                                   virtualAddress);
+  if (address != -1)
+    {
+      return address;
+    }
+
+  else if (nextAvailableFrame + 1 < NUM_FRAMES)
+    {
+      clearTable (nextAvailableFrame + 1);
+      return nextAvailableFrame + 1;
+    }
+//TODO: not to evict the previous frame? or should i not evict even further?
+  PMevict (virtualAddress, maxPage);
+  PMwrite (maxParent, 0);
+
   return 0;
 }
 
-uint64_t getAddress (uint64_t virtualAddress)
+uint64_t translateAddress (uint64_t virtualAddress)
 {
   uint64_t offSet = getOffSet (virtualAddress);
   virtualAddress = virtualAddress >> OFFSET_WIDTH; // TODO: is needed?
   uint64_t currentOffSet = 0;
   word_t nextToRead = 0;
+  bool needToBeRestored = false;
 
   //TODO: this should be generic
   for (int currentDepth = 0; currentDepth < TABLES_DEPTH; ++currentDepth)
@@ -103,13 +154,18 @@ uint64_t getAddress (uint64_t virtualAddress)
                                                 - 1))
                       & (PAGE_SIZE - 1);
       PMread (PAGE_SIZE * nextToRead + currentOffSet, &nextToRead);
+
       if (!nextToRead)
         { // we enter here iff we can't find empty frame
-          nextToRead = findFreeFrame ();
+          uint64_t oldPage = nextToRead;
+          nextToRead = (word_t) findFreeFrame (virtualAddress);
+          PMwrite (oldPage * PAGE_SIZE + currentOffSet, nextToRead);
+          needToBeRestored = true;
         }
+
     }
-  //TODO: handle when missing page
-  //TODO: implement the algorithm they describe via zeroing and so on
+  if (needToBeRestored)
+    PMrestore (nextToRead, virtualAddress);
   return nextToRead * PAGE_SIZE + offSet;
 }
 
@@ -122,7 +178,7 @@ uint64_t getAddress (uint64_t virtualAddress)
  */
 int VMread (uint64_t virtualAddress, word_t *value)
 {
-  auto readAdd = getAddress (virtualAddress);
+  auto readAdd = translateAddress (virtualAddress);
   PMread (readAdd, value);
   return 1;
 }
@@ -135,7 +191,7 @@ int VMread (uint64_t virtualAddress, word_t *value)
  */
 int VMwrite (uint64_t virtualAddress, word_t value)
 {
-  auto readAdd = getAddress (virtualAddress);
+  auto readAdd = translateAddress (virtualAddress);
   PMwrite (readAdd, value);
   return 1;
 }
