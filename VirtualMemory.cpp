@@ -74,7 +74,7 @@ traverseTree (int currentDepth, uint64_t currentFrame, uint64_t lastFrame, uint6
   if (currentDepth == TABLES_DEPTH)
     {
       uint64_t cyclic_distance = cyclicDistance (pathToLeaf, virtualAddress);
-      if (*maxDistance < cyclic_distance)
+      if (*maxDistance < cyclic_distance && *to_evict != prevAddress)
         {
           *maxDistance = cyclic_distance;
           *to_evict = pathToLeaf;
@@ -137,9 +137,10 @@ uint64_t findFreeFrame (uint64_t virtualAddress, uint64_t lastFrame, int current
     }
 
   uint64_t tmp = translateAddress (to_evict);
-  PMevict (tmp, to_evict);
-  clearTable (tmp);
   PMwrite (maxParent, 0);
+  PMevict (tmp, to_evict);
+  if(currentDepth < TABLES_DEPTH -1)
+    clearTable (tmp);
   return tmp;
 }
 
