@@ -131,7 +131,7 @@ uint64_t findFreeFrame (uint64_t virtualAddress, uint64_t lastFrame, int current
 
   else if (nextAvailableFrame + 1 < NUM_FRAMES)
     {
-      if(currentDepth < TABLES_DEPTH -1 && isZeroed (nextAvailableFrame + 1))
+      if(currentDepth < TABLES_DEPTH -1)
         clearTable (nextAvailableFrame + 1);
       return nextAvailableFrame + 1;
     }
