@@ -69,9 +69,6 @@ traverseTree (int currentDepth, uint64_t currentFrame, uint64_t lastFrame, uint6
               uint64_t virtualAddress)
 {
 
-  if(isZeroed (currentFrame) && currentDepth < TABLES_DEPTH){
-    return currentFrame;
-  }
 
   if (currentFrame > *nextAvailableFrame)
     *nextAvailableFrame = currentFrame;
@@ -143,10 +140,10 @@ uint64_t findFreeFrame (uint64_t virtualAddress, uint64_t lastFrame, int current
     }
 
   uint64_t tmp = translateAddress (to_evict);
-  PMwrite (maxParent, 0);
   PMevict (tmp, to_evict);
   if(currentDepth < TABLES_DEPTH-1)
     clearTable (tmp);
+  PMwrite (maxParent, 0);
   return tmp;
 }
 
