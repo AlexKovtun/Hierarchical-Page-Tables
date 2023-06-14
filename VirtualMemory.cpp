@@ -68,8 +68,14 @@ traverseTree (int currentDepth, uint64_t currentFrame, uint64_t lastFrame, uint6
               uint64_t prevAddress, uint64_t *maxDistance, uint64_t *to_evict, uint64_t *maxParent, uint64_t pathToLeaf,
               uint64_t virtualAddress)
 {
+
+  if(isZeroed (currentFrame) && currentDepth < TABLES_DEPTH){
+    return currentFrame;
+  }
+
   if (currentFrame > *nextAvailableFrame)
     *nextAvailableFrame = currentFrame;
+
 
   if (currentDepth == TABLES_DEPTH)
     {
