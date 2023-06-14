@@ -6,12 +6,20 @@
 #include "PhysicalMemory.h"
 #include <cmath>
 
+bool isZeroed (uint64_t numFrame)
+{
+  word_t value = 0;
+  for (int row = 0; row < PAGE_SIZE; ++row)
+    {
+      PMread( numFrame * PAGE_SIZE + row, &value);
+      if(value != 0){
+          return false;
+        }
+    }
+  return true;
+}
+
 uint64_t translateAddress (uint64_t virtualAddress);
-
-/*
- * According to this design, VMInitialize() only has to clear frame 0.
- */
-
 /**
  *
  * @param p
@@ -33,6 +41,10 @@ void clearTable (uint64_t numFrame)
     }
 }
 
+
+/*
+ * According to this design, VMInitialize() only has to clear frame 0.
+ */
 void VMinitialize ()
 {
   clearTable (0); // should it clear the whole table?
@@ -119,7 +131,7 @@ uint64_t findFreeFrame (uint64_t virtualAddress, uint64_t lastFrame, int current
 
   else if (nextAvailableFrame + 1 < NUM_FRAMES)
     {
-      if(currentDepth < TABLES_DEPTH )
+      if(currentDepth < TABLES_DEPTH-1)
         clearTable (nextAvailableFrame + 1);
       return nextAvailableFrame + 1;
     }
@@ -130,6 +142,7 @@ uint64_t findFreeFrame (uint64_t virtualAddress, uint64_t lastFrame, int current
   PMwrite (maxParent, 0);
   return tmp;
 }
+
 
 uint64_t translateAddress (uint64_t virtualAddress)
 {
