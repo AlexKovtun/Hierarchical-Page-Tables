@@ -137,8 +137,7 @@ uint64_t findFreeFrame (uint64_t virtualAddress, uint64_t lastFrame, int current
     }
 
   uint64_t tmp = translateAddress (to_evict);
-  if(currentDepth < TABLES_DEPTH -1)
-    PMwrite (maxParent, 0);
+  PMwrite (maxParent, 0);
   PMevict (tmp, to_evict);
   if(currentDepth < TABLES_DEPTH -1)
     clearTable (tmp);
