@@ -129,7 +129,7 @@ uint64_t findFreeFrame (uint64_t virtualAddress, uint64_t lastFrame, int current
       return address;
     }
 
-  else if (nextAvailableFrame + 1 < NUM_FRAMES )
+  else if (nextAvailableFrame + 1 < NUM_FRAMES)
     {
       if(currentDepth < TABLES_DEPTH-1 && isZeroed (nextAvailableFrame))
         clearTable (nextAvailableFrame + 1);
@@ -217,4 +217,3 @@ int VMwrite (uint64_t virtualAddress, word_t value)
   PMwrite (address, value);
   return 1;
 }
-
