@@ -102,7 +102,7 @@ traverseTree (int currentDepth, uint64_t currentFrame, uint64_t lastFrame, uint6
   return -1;
 }
 
-uint64_t findFreeFrame (uint64_t virtualAddress, uint64_t lastFrame)
+uint64_t findFreeFrame (uint64_t virtualAddress, uint64_t lastFrame, int currentDepth)
 {
   uint64_t nextAvailableFrame = 0, maxDistance = 0, to_evict = 0, maxParent = 0;
   uint64_t pathToLeaf = 0;
@@ -119,7 +119,8 @@ uint64_t findFreeFrame (uint64_t virtualAddress, uint64_t lastFrame)
 
   else if (nextAvailableFrame + 1 < NUM_FRAMES)
     {
-      clearTable (nextAvailableFrame + 1);
+      if(currentDepth < TABLES_DEPTH - 1)
+        clearTable (nextAvailableFrame + 1);
       return nextAvailableFrame + 1;
     }
 
@@ -151,7 +152,7 @@ uint64_t translateAddress (uint64_t virtualAddress)
       if (!nextToRead)
         { // we enter here iff we can't find empty frame
           nextToRead = (word_t) findFreeFrame (
-              virtualAddress, lastFrame);
+              virtualAddress, lastFrame, currentDepth);
           PMwrite (prevFrame, nextToRead);
           lastFrame = nextToRead;
           needToBeRestored = true;
