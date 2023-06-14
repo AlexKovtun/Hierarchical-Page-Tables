@@ -108,7 +108,8 @@ traverseTree (int currentDepth, uint64_t currentFrame, uint64_t lastFrame, uint6
 
   if (isEmptyFrame && currentFrame != lastFrame)
     {
-      PMwrite (prevAddress, 0);
+      if(currentDepth < TABLES_DEPTH -1)
+        PMwrite (prevAddress, 0);
       return currentFrame;
     }
   return -1;
