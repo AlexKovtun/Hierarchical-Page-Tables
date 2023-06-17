@@ -91,7 +91,7 @@ traverseTree (uint64_t virtualAddress, int currentDepth, word_t currentFrame, ui
   //TODO: watch out some danger here
 
   uint64_t currentStageOffSet = *parentOffSet;
-  if (currentFrame > *maxFrameIndex)
+  if ((uint64_t)currentFrame > *maxFrameIndex)
     *maxFrameIndex = currentFrame;
 
   if (currentDepth == TABLES_DEPTH)
@@ -252,7 +252,6 @@ int VMread (uint64_t virtualAddress, word_t *value)
     {
       return 0;
     }
-  uint64_t offSet = virtualAddress & (PAGE_SIZE - 1);
 //  auto page = translateAddress (virtualAddress >> OFFSET_WIDTH);
 //  auto address = page * PAGE_SIZE + offSet;
   uint64_t address = translateAddress (virtualAddress);
@@ -272,7 +271,7 @@ int VMwrite (uint64_t virtualAddress, word_t value)
     {
       return 0;
     }
-  uint64_t offSet = virtualAddress & (PAGE_SIZE - 1);
+//  uint64_t offSet = virtualAddress & (PAGE_SIZE - 1);
   PMwrite (translateAddress (virtualAddress), value);
   return 1;
 }
